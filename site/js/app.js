@@ -2,7 +2,11 @@ import { buildPlots } from "./assemble.js";
 import { readTable } from "./csv.js";
 import { loadSuite, loadTarget, predictTarget } from "./predict.js";
 
-const MODELS = "models";
+// The model repository at a fixed revision, so a page always runs the models
+// it was checked against; `?models=<url>` reads them from elsewhere.
+const MODEL_REPO = "https://huggingface.co/gcol33/resolve-models/resolve";
+const MODEL_REVISION = "533b13022146d7ac62ab09456a148b8318f89f24";
+const MODELS = new URLSearchParams(location.search).get("models") ?? `${MODEL_REPO}/${MODEL_REVISION}`;
 // Plots with coordinates read the context suite; the rest the species-only one.
 const SUITES = { context: "V_species_context", species: "V_minimal" };
 const TARGET_LABELS = {
