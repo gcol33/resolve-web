@@ -1,0 +1,112 @@
+:root {
+  --bg: #fbfaf7;
+  --surface: #ffffff;
+  --text: #1d2420;
+  --muted: #5b655f;
+  --line: #d9ddd8;
+  --accent: #2f6b4f;
+  --accent-text: #ffffff;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141816;
+    --surface: #1c211e;
+    --text: #e6ebe7;
+    --muted: #a3ada6;
+    --line: #333b36;
+    --accent: #7fc4a0;
+    --accent-text: #0f1a14;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+header, main, footer {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+header { padding-top: 2.5rem; }
+
+h1 { font-size: 1.9rem; margin: 0 0 0.6rem; }
+h2 { font-size: 1.25rem; margin: 0 0 0.6rem; }
+h3 { font-size: 1rem; margin: 1rem 0 0.4rem; }
+
+.lede { font-size: 1.08rem; max-width: 46rem; }
+
+section {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin: 1.25rem 0;
+}
+
+.note { color: var(--muted); font-size: 0.93rem; }
+
+.files { display: flex; flex-wrap: wrap; gap: 1rem; }
+
+.file {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.file input { font-weight: 400; max-width: 100%; }
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) minmax(0, 18rem);
+  gap: 0.4rem 0.8rem;
+  align-items: center;
+}
+
+select, button { font: inherit; }
+
+select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.25rem 0.4rem;
+  max-width: 100%;
+}
+
+.checks { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-bottom: 0.5rem; }
+
+button {
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 0;
+  border-radius: 6px;
+  padding: 0.5rem 1.1rem;
+  cursor: pointer;
+}
+
+button:disabled { opacity: 0.45; cursor: default; }
+
+progress { display: block; width: 100%; margin-top: 0.8rem; accent-color: var(--accent); }
+
+.table-wrap { overflow-x: auto; margin-top: 0.8rem; }
+
+table { border-collapse: collapse; font-size: 0.88rem; white-space: nowrap; }
+th, td { border-bottom: 1px solid var(--line); padding: 0.3rem 0.6rem; text-align: left; }
+th { position: sticky; top: 0; background: var(--surface); }
+
+footer { color: var(--muted); font-size: 0.9rem; padding-bottom: 2rem; }
+a { color: var(--accent); }

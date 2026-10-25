@@ -1,0 +1,4 @@
+site/models
+tests/node_modules
+tests/package-lock.json
+__pycache__/

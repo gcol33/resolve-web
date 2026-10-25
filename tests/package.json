@@ -1,0 +1,8 @@
+{
+  "name": "resolve-web-tests",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "onnxruntime-web": "1.30.0"
+  }
+}
