@@ -39,6 +39,27 @@ export function readNumber(cell) {
   return Number.isFinite(v) ? v : null;
 }
 
+const lowerCase = new WeakMap();
+
+// A typed name as the models know it: spaces trimmed and collapsed, then a
+// training name as written, an EVA name's training name, or either in any
+// letter case. `known` is false when none of them matches.
+export function resolveName(raw, taxonomy) {
+  const name = String(raw ?? "").trim().replace(/\s+/g, " ");
+  if (!taxonomy || name === "") return { name, known: false };
+  if (name in taxonomy.taxa) return { name, known: true };
+  if (name in taxonomy.aliases) return { name: taxonomy.aliases[name], known: true };
+  let lower = lowerCase.get(taxonomy);
+  if (!lower) {
+    lower = new Map();
+    for (const n of Object.keys(taxonomy.aliases)) lower.set(n.toLowerCase(), taxonomy.aliases[n]);
+    for (const n of Object.keys(taxonomy.taxa)) lower.set(n.toLowerCase(), n);
+    lowerCase.set(taxonomy, lower);
+  }
+  const match = lower.get(name.toLowerCase());
+  return match ? { name: match, known: true } : { name, known: false };
+}
+
 function keepSmallest(map, key, name) {
   if (!name) return;
   const current = map.get(key);
@@ -48,8 +69,10 @@ function keepSmallest(map, key, name) {
 // columns: { plot, species, abundance?, genus?, family?, latitude?, longitude?,
 //            covariates: { <schema name>: <column> } }
 // A plot's coordinates and covariates come from `header` when given, else
-// from the first non-empty cell among its records in `species`.
-export function buildPlots(species, columns, { header = null, headerColumns = columns, zeroAs = 1 } = {}) {
+// from the first non-empty cell among its records in `species`. Without a
+// genus or family column, a name takes them from `taxonomy` (taxonomy.json),
+// as every training record carried them.
+export function buildPlots(species, columns, { header = null, headerColumns = columns, zeroAs = 1, taxonomy = null } = {}) {
   const col = (table, name) => (name ? table.columns.get(name) : undefined);
   const plotCol = col(species, columns.plot);
   const nameCol = col(species, columns.species);
@@ -83,6 +106,17 @@ export function buildPlots(species, columns, { header = null, headerColumns = co
       plot.covers.push(Math.fround(cover));
     } else {
       plot.covers[at] = Math.fround(plot.covers[at] + Math.fround(cover));
+    }
+  }
+
+  if (taxonomy) {
+    for (const plot of plots) {
+      for (const name of plot.names) {
+        const entry = taxonomy.taxa[name];
+        if (!entry) continue;
+        if (!genusCol && entry[0] >= 0) genusOf.set(name, taxonomy.genera[entry[0]]);
+        if (!familyCol && entry[1] >= 0) familyOf.set(name, taxonomy.families[entry[1]]);
+      }
     }
   }
 

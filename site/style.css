@@ -62,7 +62,19 @@ a:visited { color: var(--visited); }
   align-items: center;
 }
 
-input, select, button { font: inherit; max-width: 100%; }
+input, select, button, textarea { font: inherit; max-width: 100%; }
+
+.block { display: block; font-weight: bold; margin-bottom: 0.2em; }
+
+textarea {
+  display: block;
+  width: 100%;
+  font-family: monospace;
+  border: 1px solid var(--rule);
+  padding: 0.3em 0.4em;
+}
+
+.grid input { width: 8em; }
 
 .checks { display: flex; flex-wrap: wrap; gap: 0.2em 1.4em; }
 

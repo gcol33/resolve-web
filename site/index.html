@@ -14,51 +14,82 @@
     <h1>RESOLVE plot predictor</h1>
     <p>Predicts the EUNIS habitat, altitude, slope, plot area, survey year and location of
       vegetation plots from their species lists. The models were trained on 1.9 million European
-      plots from the European Vegetation Archive. They run in your browser; your files are not
+      plots from the European Vegetation Archive. They run in your browser; your data are not
       uploaded anywhere.</p>
   </header>
 
   <main>
-    <section id="input" aria-labelledby="input-title">
-      <h2 id="input-title">Your plots</h2>
-      <p>One row per species record, with a plot identifier and a species name (World Flora Online
-        spelling). A cover value (percent) is used when present. Coordinates, year and month can sit in
-        the same table, repeated on every record of a plot, or in a separate table with one row per plot.</p>
-      <div class="panel">
-      <div class="files">
-        <label class="file">Species records
-          <input type="file" id="species-file" accept=".csv,.tsv,.txt">
-        </label>
-        <label class="file">Plot table (optional)
-          <input type="file" id="header-file" accept=".csv,.tsv,.txt">
-        </label>
-      </div>
-      <div id="mapping" hidden>
-        <h3>Columns</h3>
-        <div id="mapping-fields" class="grid"></div>
-      </div>
-      </div>
-      <p id="input-summary" class="note" aria-live="polite"></p>
+    <section aria-labelledby="targets-title">
+      <h2 id="targets-title">What to predict</h2>
+      <div id="target-list" class="checks"></div>
+      <p>Plots with coordinates use the models that also read location, year and month; plots
+        without use the species-only models. Every prediction combines five independently trained
+        models, and gives their spread.</p>
     </section>
 
-    <section id="targets" aria-labelledby="targets-title">
-      <h2 id="targets-title">What to predict</h2>
+    <section aria-labelledby="paste-title">
+      <h2 id="paste-title">One plot</h2>
+      <p>Type or paste the species of a plot, one per line. A cover value in percent may follow
+        the name. The list below is a beech forest in the Vienna Woods; press Predict to try it.</p>
       <div class="panel">
-        <div id="target-list" class="checks"></div>
-        <button id="run" type="button" disabled>Predict</button>
+        <label for="paste" class="block">Species</label>
+        <textarea id="paste" rows="12" spellcheck="false">Fagus sylvatica	70
+Carpinus betulus	10
+Quercus petraea	5
+Galium odoratum	15
+Anemone nemorosa	20
+Lamium galeobdolon	5
+Mercurialis perennis	10
+Viola reichenbachiana	2
+Carex sylvatica	3
+Brachypodium sylvaticum	2
+Asarum europaeum	3
+Polygonatum multiflorum	1
+Cardamine bulbifera	2
+Melica uniflora	3</textarea>
+        <p id="paste-check" aria-live="polite"></p>
+        <div class="grid">
+          <label for="paste-lat">Latitude</label><input id="paste-lat" inputmode="decimal" value="48.21">
+          <label for="paste-lon">Longitude</label><input id="paste-lon" inputmode="decimal" value="16.17">
+          <label for="paste-year">Year</label><input id="paste-year" inputmode="numeric" value="2021">
+          <label for="paste-month">Month</label><input id="paste-month" inputmode="numeric" value="5">
+        </div>
+        <p>Coordinates, year and month are optional; leave them empty if unknown.</p>
+        <button id="run-paste" type="button">Predict</button>
       </div>
-      <p class="note">Plots with coordinates use the models that also read location, year and month;
-        plots without use the species-only models. Every prediction is the combined result of five
-        independently trained models, with their spread.</p>
-      <progress id="progress" max="1" value="0" hidden></progress>
-      <p id="status" class="note" aria-live="polite"></p>
+    </section>
+
+    <section aria-labelledby="upload-title">
+      <h2 id="upload-title">Many plots</h2>
+      <p>Upload a table with one row per species record (CSV, semicolon- or tab-separated).
+        Coordinates, year and month can be columns of the same table, repeated on every record of a
+        plot, or of a second table with one row per plot. The columns are found by name:</p>
+      <div class="table-wrap"><table id="column-guide"></table></div>
+      <div class="panel">
+        <div class="files">
+          <label class="file">Species records
+            <input type="file" id="species-file" accept=".csv,.tsv,.txt">
+          </label>
+          <label class="file">Plot table (optional)
+            <input type="file" id="header-file" accept=".csv,.tsv,.txt">
+          </label>
+        </div>
+        <div id="mapping" hidden>
+          <h3>Columns found</h3>
+          <div id="mapping-fields" class="grid"></div>
+        </div>
+        <p id="input-summary" aria-live="polite"></p>
+        <button id="run-upload" type="button" disabled>Predict</button>
+      </div>
     </section>
 
     <section id="results" aria-labelledby="results-title" hidden>
       <h2 id="results-title">Predictions</h2>
-      <button id="download" type="button">Download CSV</button>
+      <progress id="progress" max="1" value="0" hidden></progress>
+      <p id="status" aria-live="polite"></p>
       <div class="table-wrap"><table id="preview"></table></div>
-      <p class="note" id="preview-note"></p>
+      <p id="preview-note"></p>
+      <button id="download" type="button">Download CSV</button>
     </section>
   </main>
 

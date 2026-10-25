@@ -76,6 +76,16 @@ export function toTable(rows) {
   return { names: keys, columns, nRows: body.length };
 }
 
+// A table from named columns of equal length.
+export function tableFromColumns(columns) {
+  const names = Object.keys(columns);
+  return {
+    names,
+    columns: new Map(names.map((n) => [n, columns[n]])),
+    nRows: names.length ? columns[names[0]].length : 0,
+  };
+}
+
 export function readTable(text) {
   return toTable(parseDelimited(text));
 }
