@@ -34,11 +34,11 @@ const FIELDS = [
     guesses: ["PlotObservationID", "plot", "plot_id", "plotid", "releve", "relevé", "releve_id", "site"] },
   { key: "species", label: "Species", table: "species", need: "required",
     guesses: ["WFO_TAXON", "species", "taxon", "taxon_name", "scientific_name", "scientificName", "name"] },
-  { key: "abundance", label: "Cover (%)", table: "species", need: "optional; every species counts the same without it",
+  { key: "abundance", label: "Cover (%)", table: "species", need: "optional; without it every species weighs the same",
     guesses: ["Cover %", "cover", "cover_percent", "abundance", "percentage_cover"] },
-  { key: "genus", label: "Genus", table: "species", need: "optional; taken from the species name without it",
+  { key: "genus", label: "Genus", table: "species", need: "optional; looked up from the species name",
     guesses: ["WFO_GENUS", "genus"] },
-  { key: "family", label: "Family", table: "species", need: "optional; taken from the species name without it",
+  { key: "family", label: "Family", table: "species", need: "optional; looked up from the species name",
     guesses: ["WFO_FAMILY", "family"] },
   { key: "latitude", label: "Latitude", table: "header", need: "optional; decimal degrees (WGS 84)",
     guesses: ["Latitude", "lat", "decimalLatitude", "y"] },
@@ -331,12 +331,15 @@ function renderOne(out) {
     rows.push(row(["EUNIS habitat", `${code}: ${EUNIS[code] ?? ""}`,
       `probability ${format(get(`eunis_prob_${code}`), 2)}`]));
   }
-  const regression = [["altitude", "Altitude", " m", 1], ["slope", "Slope", "°", 0.1],
-    ["area", "Plot area", " m²", 1], ["year", "Survey year", "", 1]];
-  for (const [key, label, unit, step] of regression) {
+  const regression = [["altitude", "Altitude", " m", 1, true], ["slope", "Slope", "°", 0.1, true],
+    ["area", "Plot area", " m²", 1, true], ["year", "Survey year", "", 1, false]];
+  for (const [key, label, unit, step, grouped] of regression) {
     if (!out.has(key)) continue;
-    rows.push(row([label, `${Number(round(get(key), step)).toLocaleString()}${unit}`,
-      `± ${Number(round(get(`${key}_sd`), step)).toLocaleString()}${unit}`]));
+    const show = (v) => {
+      const r = Number(round(v, step));
+      return (grouped ? r.toLocaleString() : String(r)) + unit;
+    };
+    rows.push(row([label, show(get(key)), `± ${show(get(`${key}_sd`))}`]));
   }
   if (out.has("location_latitude")) {
     const lat = get("location_latitude");

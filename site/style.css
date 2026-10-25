@@ -92,6 +92,7 @@ table {
 }
 th, td { border: 1px solid var(--rule); padding: 0.2em 0.4em; text-align: left; }
 th { background: var(--head); text-align: center; }
+#column-guide { white-space: normal; }
 
 footer { margin-top: 2em; padding-bottom: 2em; }
 footer p { border-top: 1px solid var(--rule); padding-top: 0.5em; }
