@@ -20,10 +20,11 @@
 
   <main>
     <section id="input" aria-labelledby="input-title">
-      <h2 id="input-title">1. Your plots</h2>
+      <h2 id="input-title">Your plots</h2>
       <p>One row per species record, with a plot identifier and a species name (World Flora Online
         spelling). A cover value (percent) is used when present. Coordinates, year and month can sit in
         the same table, repeated on every record of a plot, or in a separate table with one row per plot.</p>
+      <div class="panel">
       <div class="files">
         <label class="file">Species records
           <input type="file" id="species-file" accept=".csv,.tsv,.txt">
@@ -36,22 +37,25 @@
         <h3>Columns</h3>
         <div id="mapping-fields" class="grid"></div>
       </div>
+      </div>
       <p id="input-summary" class="note" aria-live="polite"></p>
     </section>
 
     <section id="targets" aria-labelledby="targets-title">
-      <h2 id="targets-title">2. What to predict</h2>
-      <div id="target-list" class="checks"></div>
+      <h2 id="targets-title">What to predict</h2>
+      <div class="panel">
+        <div id="target-list" class="checks"></div>
+        <button id="run" type="button" disabled>Predict</button>
+      </div>
       <p class="note">Plots with coordinates use the models that also read location, year and month;
         plots without use the species-only models. Every prediction is the combined result of five
         independently trained models, with their spread.</p>
-      <button id="run" type="button" disabled>Predict</button>
       <progress id="progress" max="1" value="0" hidden></progress>
       <p id="status" class="note" aria-live="polite"></p>
     </section>
 
     <section id="results" aria-labelledby="results-title" hidden>
-      <h2 id="results-title">3. Predictions</h2>
+      <h2 id="results-title">Predictions</h2>
       <button id="download" type="button">Download CSV</button>
       <div class="table-wrap"><table id="preview"></table></div>
       <p class="note" id="preview-note"></p>
