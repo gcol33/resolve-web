@@ -199,6 +199,7 @@ export function encodeBatch(assembled, plotIndices, schema) {
   const genusIds = new BigInt64Array(n * width);
   const familyIds = new BigInt64Array(n * width);
   const weights = new Float32Array(n * width);
+  const mask = new Float32Array(n * width);
   const continuous = new Float32Array(n * k).fill(NaN);
   const recognised = new Float64Array(n);
 
@@ -222,6 +223,7 @@ export function encodeBatch(assembled, plotIndices, schema) {
       genusIds[at] = BigInt(vocab.genus.get(genusOf.get(name) ?? "") ?? 0);
       familyIds[at] = BigInt(vocab.family.get(familyOf.get(name) ?? "") ?? 0);
       weights[at] = plotWeights[i];
+      mask[at] = 1;
     });
 
     const site = plot.site;
@@ -252,6 +254,7 @@ export function encodeBatch(assembled, plotIndices, schema) {
       genus_ids: [genusIds, [n, width]],
       family_ids: [familyIds, [n, width]],
       weights: [weights, [n, width]],
+      mask: [mask, [n, width]],
       has_cover: [new Float32Array(n).fill(hasCover ? 1 : 0), [n, 1]],
       continuous: [continuous, [n, k]],
     },

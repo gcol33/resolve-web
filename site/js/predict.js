@@ -45,7 +45,8 @@ export async function predictTarget(ort, suite, name, assembled, plotIndices, op
     const outputs = heads.map((head) => new Float32Array(n * (head.classification ? head.classes.length : 1)));
     for (const { start, encoded } of batches) {
       const feeds = {};
-      for (const [key, [data, dims]] of Object.entries(encoded.feeds)) {
+      for (const key of session.inputNames) {
+        const [data, dims] = encoded.feeds[key];
         feeds[key] = new ort.Tensor(data instanceof BigInt64Array ? "int64" : "float32", data, dims);
       }
       const result = await session.run(feeds);

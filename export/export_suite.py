@@ -25,9 +25,9 @@ import onnxruntime as ort
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from member import PooledMember, load_checkpoint  # noqa: E402
+from member import Member, load_checkpoint, member_from  # noqa: E402
 
-INPUT_NAMES = ["species_ids", "genus_ids", "family_ids", "weights", "has_cover", "continuous"]
+INPUT_NAMES = ["species_ids", "genus_ids", "family_ids", "weights", "mask", "has_cover", "continuous"]
 FORMAT_VERSION = 1
 STORAGE = {"float32": torch.float32, "float16": torch.float16}
 # The largest difference from the float32 checkpoint on the probe batch: a
@@ -37,7 +37,7 @@ STORAGE = {"float32": torch.float32, "float16": torch.float16}
 TOLERANCE = {"float32": 5e-4, "float16": 5e-2}
 
 
-def probe_inputs(member: PooledMember, n: int = 64, seed: int = 0) -> tuple[torch.Tensor, ...]:
+def probe_inputs(member: Member, n: int = 64, seed: int = 0) -> tuple[torch.Tensor, ...]:
     g = torch.Generator().manual_seed(seed)
     s = member.schema
     width = min(s.width, 40)
@@ -49,20 +49,21 @@ def probe_inputs(member: PooledMember, n: int = 64, seed: int = 0) -> tuple[torc
     weights = torch.log1p(torch.rand(n, width, generator=g) * 50) * mask
     continuous = member.mean + member.scale * torch.randn(n, member.mean.numel(), generator=g)
     continuous[torch.rand(continuous.shape, generator=g) < 0.1] = float("nan")
-    return species, genus, family, weights, torch.ones(n, 1), continuous.float()
+    return species, genus, family, weights, mask.float(), torch.ones(n, 1), continuous.float()
 
 
 def reference_forward(a: dict, inputs) -> tuple[torch.Tensor, ...]:
     """The same forward with the float32 checkpoint weights."""
     with torch.no_grad():
-        return PooledMember(a, storage=torch.float32).eval()(*inputs)
+        return member_from(a, storage=torch.float32).eval()(*inputs)
 
 
-def export_member(member: PooledMember, inputs, path: Path) -> None:
+def export_member(member: Member, inputs, path: Path) -> None:
     n = torch.export.Dim("n", min=1)
     width = torch.export.Dim("width", min=1)
     shapes = {"species_ids": {0: n, 1: width}, "genus_ids": {0: n, 1: width},
               "family_ids": {0: n, 1: width}, "weights": {0: n, 1: width},
+              "mask": {0: n, 1: width},
               "has_cover": {0: n}, "continuous": {0: n}}
     program = torch.onnx.export(
         member, inputs, input_names=INPUT_NAMES,
@@ -71,7 +72,7 @@ def export_member(member: PooledMember, inputs, path: Path) -> None:
     program.save(str(path))
 
 
-def check_member(path: Path, member: PooledMember, reference, inputs,
+def check_member(path: Path, member: Member, reference, inputs,
                  tolerance: float) -> dict[str, float]:
     session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
     feeds = {name: t.numpy() for name, t in zip(INPUT_NAMES, inputs)}
@@ -89,7 +90,7 @@ def check_member(path: Path, member: PooledMember, reference, inputs,
     return report
 
 
-def schema_json(member: PooledMember) -> dict:
+def schema_json(member: Member) -> dict:
     """The inputs the browser assembles for a member. A head's target scaler is
     applied inside the member's graph, so it is not part of the shared schema."""
     s = member.schema
@@ -125,7 +126,7 @@ def main() -> int:
         schema, members = None, []
         for m in target["members"]:
             a = load_checkpoint(str(args.suite / m["file"]))
-            member = PooledMember(a, storage=STORAGE[args.storage]).eval()
+            member = member_from(a, storage=STORAGE[args.storage]).eval()
             this = schema_json(member)
             if schema is None:
                 schema = this
