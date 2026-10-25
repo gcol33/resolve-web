@@ -1,112 +1,70 @@
 :root {
-  --bg: #fbfaf7;
-  --surface: #ffffff;
-  --text: #1d2420;
-  --muted: #5b655f;
-  --line: #d9ddd8;
-  --accent: #2f6b4f;
-  --accent-text: #ffffff;
+  --text: #111111;
+  --muted: #555555;
+  --line: #999999;
+  --link: #0000cc;
+  --visited: #551a8b;
+  --shade: #eeeeee;
   color-scheme: light;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #141816;
-    --surface: #1c211e;
-    --text: #e6ebe7;
-    --muted: #a3ada6;
-    --line: #333b36;
-    --accent: #7fc4a0;
-    --accent-text: #0f1a14;
-    color-scheme: dark;
-  }
-}
-
-* { box-sizing: border-box; }
 
 [hidden] { display: none !important; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: #ffffff;
   color: var(--text);
-  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 17px/1.45 Georgia, "Times New Roman", Times, serif;
 }
 
 header, main, footer {
-  max-width: 60rem;
+  max-width: 46em;
   margin: 0 auto;
   padding: 0 16px;
 }
 
-header { padding-top: 2.5rem; }
+header { padding-top: 1.5em; }
+header::after { content: ""; display: block; border-bottom: 2px solid var(--text); }
 
-h1 { font-size: 1.9rem; margin: 0 0 0.6rem; }
-h2 { font-size: 1.25rem; margin: 0 0 0.6rem; }
-h3 { font-size: 1rem; margin: 1rem 0 0.4rem; }
+h1 { font-size: 1.8em; font-weight: normal; margin: 0 0 0.4em; }
+h2 { font-size: 1.2em; margin: 1.6em 0 0.5em; }
+h3 { font-size: 1em; margin: 1em 0 0.3em; }
 
-.lede { font-size: 1.08rem; max-width: 46rem; }
+section { border-bottom: 1px solid var(--line); padding-bottom: 1.2em; }
 
-section {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 1.25rem;
-  margin: 1.25rem 0;
-}
+.note { color: var(--muted); font-size: 0.92em; }
 
-.note { color: var(--muted); font-size: 0.93rem; }
+a { color: var(--link); }
+a:visited { color: var(--visited); }
 
-.files { display: flex; flex-wrap: wrap; gap: 1rem; }
-
-.file {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  font-weight: 600;
-  min-width: 0;
-}
-
-.file input { font-weight: 400; max-width: 100%; }
+.files { display: flex; flex-wrap: wrap; gap: 0.6em 2em; }
+.file { display: flex; flex-direction: column; gap: 0.2em; min-width: 0; }
+.file input { max-width: 100%; font-family: inherit; }
 
 .grid {
   display: grid;
-  grid-template-columns: minmax(8rem, max-content) minmax(0, 18rem);
-  gap: 0.4rem 0.8rem;
+  grid-template-columns: minmax(7em, max-content) minmax(0, 16em);
+  gap: 0.3em 0.8em;
   align-items: center;
 }
 
-select, button { font: inherit; }
+select, button { font-family: inherit; font-size: 0.95em; max-width: 100%; }
 
-select {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 0.25rem 0.4rem;
-  max-width: 100%;
+.checks { display: flex; flex-wrap: wrap; gap: 0.2em 1.4em; margin-bottom: 0.4em; }
+
+button { padding: 0.15em 0.8em; }
+
+progress { display: block; width: 100%; margin-top: 0.8em; }
+
+.table-wrap { overflow-x: auto; margin-top: 0.8em; }
+
+table {
+  border-collapse: collapse;
+  font: 0.82em/1.3 "Courier New", Courier, monospace;
+  white-space: nowrap;
 }
+th, td { border: 1px solid var(--line); padding: 0.2em 0.5em; text-align: left; }
+th { background: var(--shade); font-weight: bold; }
 
-.checks { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-bottom: 0.5rem; }
-
-button {
-  background: var(--accent);
-  color: var(--accent-text);
-  border: 0;
-  border-radius: 6px;
-  padding: 0.5rem 1.1rem;
-  cursor: pointer;
-}
-
-button:disabled { opacity: 0.45; cursor: default; }
-
-progress { display: block; width: 100%; margin-top: 0.8rem; accent-color: var(--accent); }
-
-.table-wrap { overflow-x: auto; margin-top: 0.8rem; }
-
-table { border-collapse: collapse; font-size: 0.88rem; white-space: nowrap; }
-th, td { border-bottom: 1px solid var(--line); padding: 0.3rem 0.6rem; text-align: left; }
-th { position: sticky; top: 0; background: var(--surface); }
-
-footer { color: var(--muted); font-size: 0.9rem; padding-bottom: 2rem; }
-a { color: var(--accent); }
+footer { color: var(--muted); padding-top: 0.8em; padding-bottom: 2em; }
+footer p { font-size: 0.88em; }
