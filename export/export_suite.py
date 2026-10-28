@@ -9,7 +9,9 @@ members) and one `<target>/seed_<k>.onnx` per member, its weights stored in
 the `--storage` dtype.
 `suite.json` lists the targets. Every member of a target must share one
 schema; the exporter stops when they do not. Each exported graph is run in
-onnxruntime against the float32 checkpoint before it is written.
+onnxruntime against the same member in torch before it is written, and the
+largest change the storage dtype makes against the float32 weights on that
+probe batch is printed beside it.
 """
 from __future__ import annotations
 
@@ -29,12 +31,14 @@ from member import Member, load_checkpoint, member_from  # noqa: E402
 
 INPUT_NAMES = ["species_ids", "genus_ids", "family_ids", "weights", "mask", "has_cover", "continuous"]
 FORMAT_VERSION = 1
-STORAGE = {"float32": torch.float32, "float16": torch.float16}
-# The largest difference from the float32 checkpoint on the probe batch: a
-# probability, or a regression output relative to max(|value|, 1). float32
-# differs by the order the kernels sum in (up to about 2e-4 on the probe
-# batch); float16 storage moves outputs by about 1e-3 of their scale.
-TOLERANCE = {"float32": 5e-4, "float16": 5e-2}
+# float16 halves the float32 files, int8 (blocks of the largest matrices,
+# float16 for the rest; see member.store) takes them to under a third.
+STORAGE = {"float32": torch.float32, "float16": torch.float16, "int8": torch.int8}
+# The largest difference of an exported graph from the same member in torch
+# on the probe batch: a probability, or a regression output relative to
+# max(|value|, 1). It comes from the order the kernels sum in (up to about
+# 2e-4 on the probe batch).
+TOLERANCE = 5e-4
 
 
 def probe_inputs(member: Member, n: int = 64, seed: int = 0) -> tuple[torch.Tensor, ...]:
@@ -52,10 +56,22 @@ def probe_inputs(member: Member, n: int = 64, seed: int = 0) -> tuple[torch.Tens
     return species, genus, family, weights, mask.float(), torch.ones(n, 1), continuous.float()
 
 
-def reference_forward(a: dict, inputs) -> tuple[torch.Tensor, ...]:
-    """The same forward with the float32 checkpoint weights."""
+def forward(member: Member, inputs) -> tuple[torch.Tensor, ...]:
     with torch.no_grad():
-        return member_from(a, storage=torch.float32).eval()(*inputs)
+        return member(*inputs)
+
+
+def difference(member: Member, got, reference) -> dict[str, float]:
+    """Per head, the largest difference of `got` from `reference`: a
+    probability, or a regression output relative to max(|value|, 1)."""
+    report = {}
+    for head, ref, out in zip(member.schema.heads, reference, got):
+        ref, out = np.asarray(ref), np.asarray(out)
+        if head.classification:
+            report[head.name] = float(np.abs(out - ref).max())
+        else:
+            report[head.name] = float((np.abs(out - ref) / np.maximum(np.abs(ref), 1.0)).max())
+    return report
 
 
 def export_member(member: Member, inputs, path: Path) -> None:
@@ -72,21 +88,13 @@ def export_member(member: Member, inputs, path: Path) -> None:
     program.save(str(path))
 
 
-def check_member(path: Path, member: Member, reference, inputs,
-                 tolerance: float) -> dict[str, float]:
+def check_member(path: Path, member: Member, inputs) -> dict[str, float]:
     session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
     feeds = {name: t.numpy() for name, t in zip(INPUT_NAMES, inputs)}
-    got = session.run(None, feeds)
-    report = {}
-    for head, ref, out in zip(member.schema.heads, reference, got):
-        ref = ref.numpy()
-        if head.classification:
-            err = float(np.abs(out - ref).max())
-        else:
-            err = float((np.abs(out - ref) / np.maximum(np.abs(ref), 1.0)).max())
-        report[head.name] = err
-        if err > tolerance:
-            raise SystemExit(f"{path}: {head.name} differs from the float32 checkpoint by {err:.2e}")
+    report = difference(member, session.run(None, feeds), forward(member, inputs))
+    for name, err in report.items():
+        if err > TOLERANCE:
+            raise SystemExit(f"{path}: {name} differs from the member in torch by {err:.2e}")
     return report
 
 
@@ -133,15 +141,17 @@ def main() -> int:
             elif this != schema:
                 raise SystemExit(f"{target['name']}: seed {m['seed']} has a schema of its own")
             inputs = probe_inputs(member)
-            reference = reference_forward(a, inputs)
             path = tdir / f"seed_{m['seed']}.onnx"
             export_member(member, inputs, path)
-            errors = check_member(path, member, reference, inputs, TOLERANCE[args.storage])
+            errors = check_member(path, member, inputs)
+            drift = difference(member, forward(member, inputs),
+                               forward(member_from(a, storage=torch.float32).eval(), inputs))
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             members.append({"seed": m["seed"], "file": path.name, "bytes": path.stat().st_size,
                             "sha256": digest, "checkpoint_sha256": m["sha256"]})
-            print(f"{target['name']} seed {m['seed']}: {path.stat().st_size / 1e6:.1f} MB, "
-                  + ", ".join(f"{k} {v:.1e}" for k, v in errors.items()), flush=True)
+            print(f"{target['name']} seed {m['seed']}: {path.stat().st_size / 1e6:.1f} MB, graph "
+                  + ", ".join(f"{k} {v:.1e}" for k, v in errors.items()) + f"; {args.storage} storage "
+                  + ", ".join(f"{k} {v:.1e}" for k, v in drift.items()), flush=True)
         entry = {"name": target["name"], "task": target["task"], "combine": target["combine"],
                  "outputs": target["outputs"], "units": target["units"],
                  "validation": target.get("validation", {})}

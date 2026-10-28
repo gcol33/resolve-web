@@ -17,7 +17,8 @@ Filling and standardising the continuous block, the species encoder (the
 weighted pool, or the transformer's tokens, self-attention and attention
 pooling), the MLP and the heads' inverse transforms all happen inside the module, so they travel with
 the weights into the exported graph. Weights are stored in `storage`
-(float16 for the browser) and computed with in float32.
+(float32, float16, or int8 blocks with float16 beside them; see
+`Member.store`) and computed with in float32.
 """
 from __future__ import annotations
 
@@ -37,6 +38,10 @@ NORM_LAYER_NORM = 1
 TASK_CLASSIFICATION = 1
 TRANSFORM_NONE, TRANSFORM_LOG1P = 0, 1
 POOL_WEIGHTINGS = {0: "binary", 1: "abundance", 2: "log1p", 3: "norm"}
+# Under int8 storage, the matrices this large: the species table
+# and the wide MLP layers, about nine tenths of a member's weights.
+INT8_MIN_ELEMENTS = 1 << 18
+INT8_BLOCK = 32
 
 
 def strings(a: dict, key: str) -> list[str]:
@@ -170,10 +175,38 @@ class Member(nn.Module):
             self.store(f"head_b{k}", f"param_head_{head.name}.output.bias")
 
     def store(self, name: str, key: str) -> None:
-        self.register_buffer(name, self.a[key].detach().to(self.storage))
+        """A weight in the storage dtype. int8 stores a matrix of at least
+        INT8_MIN_ELEMENTS entries in blocks of INT8_BLOCK consecutive entries
+        of a row (the whole row when its length is not a multiple), each block
+        as round(x / s) with s = max|x| / 127 and its s beside it as float32;
+        every other weight as float16."""
+        t = self.a[key].detach().float()
+        if self.storage != torch.int8:
+            self.register_buffer(name, t.to(self.storage))
+        elif t.dim() != 2 or t.numel() < INT8_MIN_ELEMENTS:
+            self.register_buffer(name, t.half())
+        else:
+            cols = t.shape[1]
+            blocks = t.unflatten(1, (-1, INT8_BLOCK if cols % INT8_BLOCK == 0 else cols))
+            s = blocks.abs().amax(2).clamp_min(1e-12) / 127.0
+            self.register_buffer(name, torch.round(blocks / s[..., None]).flatten(1).to(torch.int8))
+            self.register_buffer(name + "_blockscale", s)
+
+    @staticmethod
+    def widen(t: torch.Tensor, scale: torch.Tensor | None) -> torch.Tensor:
+        """`t` in float32: int8 blocks times their scales along the last axis."""
+        if scale is None:
+            return t.float()
+        return (t.unflatten(-1, (scale.shape[-1], -1)).float() * scale.unsqueeze(-1)).flatten(-2)
 
     def w(self, name: str) -> torch.Tensor:
-        return getattr(self, name).float()
+        return self.widen(getattr(self, name), getattr(self, name + "_blockscale", None))
+
+    def rows(self, name: str, ids: torch.Tensor) -> torch.Tensor:
+        """Rows `ids` of an embedding table, gathered before they are widened
+        to float32 so the rest of the table stays in its storage dtype."""
+        scale = getattr(self, name + "_blockscale", None)
+        return self.widen(getattr(self, name)[ids], None if scale is None else scale[ids])
 
     def species_features(self, species_ids, genus_ids, family_ids, weights, mask, has_cover):
         raise NotImplementedError
@@ -219,7 +252,7 @@ class PooledMember(Member):
         share = (masked / masked.sum(1, keepdim=True).clamp_min(1e-8)).unsqueeze(-1)
 
         def pool(ids, table):
-            return (self.w(table)[ids] * share).sum(1)
+            return (self.rows(table, ids) * share).sum(1)
 
         return torch.cat([pool(species_ids, "species_table"), pool(genus_ids, "genus_table"),
                           pool(family_ids, "family_table"), has_cover], 1)
@@ -278,8 +311,8 @@ class TransformerMember(Member):
         self.store("pool_norm_b", f"{e}pool_norm.bias")
 
     def species_features(self, species_ids, genus_ids, family_ids, weights, mask, has_cover):
-        tokens = (self.w("species_table")[species_ids] + self.w("genus_table")[genus_ids]
-                  + self.w("family_table")[family_ids]
+        tokens = (self.rows("species_table", species_ids) + self.rows("genus_table", genus_ids)
+                  + self.rows("family_table", family_ids)
                   + weights.unsqueeze(-1) * self.w("weight_proj")[:, 0])
         # A plot with no species keeps its first position as a key, so the
         # attention softmax has something to attend to.

@@ -7,6 +7,12 @@ import { loadSuite, loadTarget, predictTarget } from "./predict.js";
 const MODEL_REPO = "https://huggingface.co/gcol33/resolve-models/resolve";
 const MODEL_REVISION = "b4e1e8a543b3f339395ff00772e1d533b86553b0";
 const MODELS = new URLSearchParams(location.search).get("models") ?? `${MODEL_REPO}/${MODEL_REVISION}`;
+// The graphs run on the GPU where the browser offers a WebGPU adapter,
+// otherwise (and for any operation WebGPU lacks) on the CPU. A GPU run takes
+// about as long for a few plots as for thousands, so its batches are larger.
+const GPU = "gpu" in navigator && Boolean(await navigator.gpu.requestAdapter().catch(() => null));
+const SESSION = { executionProviders: GPU ? ["webgpu", "wasm"] : ["wasm"], logSeverityLevel: 3 };
+const BATCHES = GPU ? { batchSize: 4096, tokenBudget: 32768 } : {};
 // Plots with coordinates read the context suite; the rest the species-only one.
 const SUITES = { context: "V_species_context", species: "V_minimal" };
 const TARGETS = {
@@ -259,6 +265,8 @@ async function predict(assembled) {
       if (!plots.length) continue;
       const result = await predictTarget(globalThis.ort, await suite(suiteName), name, assembled, plots, {
         fetchBytes: async (p) => (await fetchOk(`${suiteName}/${p}`)).arrayBuffer(),
+        sessionOptions: SESSION,
+        ...BATCHES,
         onProgress: ({ member, members, done, total }) => {
           progress.value = (t + (member + done / total) / members) / targets.length;
           $("status").textContent = `${TARGETS[name]}: model ${member + 1} of ${members}`;
@@ -385,6 +393,9 @@ function download() {
 }
 
 globalThis.ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
+// Several threads need a cross-origin isolated page (js/isolate.js); past
+// about eight the threads wait on each other more than they help.
+globalThis.ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(8, navigator.hardwareConcurrency || 1) : 1;
 renderTargets();
 renderGuide();
 checkPaste();

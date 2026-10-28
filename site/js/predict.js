@@ -26,24 +26,46 @@ function directory(path) {
   return cut < 0 ? "" : path.slice(0, cut + 1);
 }
 
+// Positions 0..n-1 of `plotIndices` in batches. Plots are ordered by the
+// number of species they keep under `cap`, so a batch is padded to the width
+// of plots like its own rather than to the widest plot of the upload (ties
+// keep the input order); a batch holds at most `batchSize` plots and at most
+// `tokenBudget` positions once padded.
+function cut(assembled, plotIndices, cap, batchSize, tokenBudget) {
+  const width = plotIndices.map((p) => Math.max(1, Math.min(cap, assembled.plots[p].names.length)));
+  const order = [...plotIndices.keys()].sort((a, b) => width[a] - width[b] || a - b);
+  const batches = [];
+  let rows = [];
+  for (const i of order) {
+    if (rows.length && (rows.length === batchSize || (rows.length + 1) * width[i] > tokenBudget)) {
+      batches.push(rows);
+      rows = [];
+    }
+    rows.push(i);
+  }
+  if (rows.length) batches.push(rows);
+  return batches;
+}
+
 // One target for `plotIndices` of `assembled`: the combined columns, the
 // per-seed values and the share of each plot's cover the target recognises.
 export async function predictTarget(ort, suite, name, assembled, plotIndices, options = {}) {
-  const { fetchBytes, batchSize = 512, onProgress = () => {} } = options;
+  const { fetchBytes, batchSize = 512, tokenBudget = 8192, sessionOptions = { executionProviders: ["wasm"] }, onProgress = () => {} } = options;
   const target = await loadTarget(suite, name);
   const n = plotIndices.length;
   const batches = [];
-  for (let start = 0; start < n; start += batchSize) {
-    batches.push({ start, encoded: encodeBatch(assembled, plotIndices.slice(start, start + batchSize), target.schema) });
+  for (const rows of cut(assembled, plotIndices, target.schema.width, batchSize, tokenBudget)) {
+    batches.push({ rows, encoded: encodeBatch(assembled, rows.map((i) => plotIndices[i]), target.schema) });
   }
   const heads = target.schema.heads;
   const members = [];
   const base = directory(suite.targets.get(name).path);
   for (const [m, member] of target.members.entries()) {
     const bytes = await fetchBytes(base + member.file);
-    const session = await ort.InferenceSession.create(new Uint8Array(bytes), { executionProviders: ["wasm"] });
+    const session = await ort.InferenceSession.create(new Uint8Array(bytes), sessionOptions);
     const outputs = heads.map((head) => new Float32Array(n * (head.classification ? head.classes.length : 1)));
-    for (const { start, encoded } of batches) {
+    let done = 0;
+    for (const { rows, encoded } of batches) {
       const feeds = {};
       for (const key of session.inputNames) {
         const [data, dims] = encoded.feeds[key];
@@ -52,15 +74,17 @@ export async function predictTarget(ort, suite, name, assembled, plotIndices, op
       const result = await session.run(feeds);
       heads.forEach((head, h) => {
         const width = head.classification ? head.classes.length : 1;
-        outputs[h].set(result[head.name].data, start * width);
+        const values = result[head.name].data;
+        rows.forEach((row, b) => outputs[h].set(values.subarray(b * width, (b + 1) * width), row * width));
       });
-      onProgress({ target: name, member: m, members: target.members.length, done: start + encoded.recognised.length, total: n });
+      done += rows.length;
+      onProgress({ target: name, member: m, members: target.members.length, done, total: n });
     }
     await session.release();
     members.push(outputs);
   }
   const recognised = new Float64Array(n);
-  for (const { start, encoded } of batches) recognised.set(encoded.recognised, start);
+  for (const { rows, encoded } of batches) rows.forEach((row, b) => { recognised[row] = encoded.recognised[b]; });
   const combined = combine(target, members, n);
   return { ...combined, recognised, seeds: target.members.map((m) => m.seed), seedValues: combined.seeds };
 }

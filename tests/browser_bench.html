@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>RESOLVE browser bench</title>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<pre id="log"></pre>
+<script type="module">
+// Runs the site's prediction path in this browser over tables served beside
+// it; browser_bench.py serves the files, opens the page and reads
+// `window.bench` when it is set. Query parameters: suite, species, header
+// (URLs), targets (comma-separated), n (plots), ep (wasm or webgpu), threads.
+import { predictTables, toCsv } from "./suite_table.mjs";
+
+const q = new URLSearchParams(location.search);
+const ort = globalThis.ort;
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
+ort.env.wasm.numThreads = Number(q.get("threads") ?? 1);
+ort.env.logLevel = "error";
+const ep = q.get("ep") ?? "wasm";
+const suite = q.get("suite");
+const get = async (url) => {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url}: ${r.status}`);
+  return r;
+};
+try {
+  let adapter = null;
+  if (ep === "webgpu") {
+    const a = await navigator.gpu?.requestAdapter();
+    adapter = a ? (a.info ? `${a.info.vendor} ${a.info.architecture} ${a.info.description}` : "adapter") : null;
+    if (!adapter) throw new Error("no WebGPU adapter");
+  }
+  const { columns, seconds, n } = await predictTables(ort,
+    async (p) => (await get(`${suite}/${p}`)).json(),
+    async (p) => (await get(`${suite}/${p}`)).arrayBuffer(),
+    await (await get(q.get("species"))).text(), await (await get(q.get("header"))).text(),
+    { targets: (q.get("targets") ?? "").split(",").filter(Boolean), limit: Number(q.get("n") ?? 0),
+      predictOptions: { sessionOptions: { executionProviders: ep === "webgpu" ? ["webgpu", "wasm"] : ["wasm"], logSeverityLevel: 3 },
+                        ...(q.get("budget") ? { tokenBudget: Number(q.get("budget")), batchSize: Number(q.get("budget")) } : {}) } });
+  window.bench = { ok: true, seconds, n, adapter, isolated: self.crossOriginIsolated,
+                   threads: ort.env.wasm.numThreads, csv: toCsv(columns) };
+} catch (e) {
+  window.bench = { ok: false, error: String(e?.stack ?? e) };
+}
+</script>
+</body>
+</html>
