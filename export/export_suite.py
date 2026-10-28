@@ -114,7 +114,7 @@ def main() -> int:
     ap.add_argument("suite", type=Path)
     ap.add_argument("out", type=Path)
     ap.add_argument("--targets", default="", help="comma-separated subset of the suite's targets")
-    ap.add_argument("--storage", choices=sorted(STORAGE), default="float32",
+    ap.add_argument("--storage", choices=sorted(STORAGE), default="float16",
                     help="the dtype the weights are stored in")
     args = ap.parse_args()
 

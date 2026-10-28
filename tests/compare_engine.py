@@ -1,11 +1,12 @@
 """Compare the site's predictions with the engine's SuitePredictor on the same plots.
 
     <python with resolve_core> tests/compare_engine.py <suite dir> <species.csv> <header.csv> \
-        <site.csv> [--max-entries N]
+        <site.csv> [--storage float32|float16] [--max-entries N]
 
 The site output comes from tests/run_suite.mjs. Every column both share is
-compared: class labels must agree, probabilities and regressions within
-TOLERANCE. `--max-entries` restricts the comparison to plots holding at most
+compared: class labels must agree on at least the share AGREEMENT asks,
+probabilities and regressions within TOLERANCE, both for the storage dtype
+the site's graphs were exported in. `--max-entries` restricts the comparison to plots holding at most
 that many distinct species, for suites whose engine kept a long plot's first
 records rather than its most abundant ones.
 """
@@ -21,7 +22,12 @@ import pandas as pd
 
 # float32 in onnxruntime-web against the engine: the order the kernels sum in
 # moves a single member's output by up to about 4e-4 (relative, or degrees).
-TOLERANCE = {"probability": 1e-4, "relative": 5e-4, "degrees": 5e-4}
+# float16 weights move a single member by up to about 0.13 (relative, on
+# 2,000 NPMS plots), 0.22 degrees and 5e-4 in a probability, and flip one
+# member's label on 1 plot in 1,000; the tolerances are about twice that.
+TOLERANCE = {"float32": {"probability": 1e-4, "relative": 5e-4, "degrees": 5e-4},
+             "float16": {"probability": 1e-3, "relative": 0.25, "degrees": 0.5}}
+AGREEMENT = {"float32": 1.0, "float16": 0.995}
 
 
 def main() -> int:
@@ -30,6 +36,8 @@ def main() -> int:
     ap.add_argument("species", type=Path)
     ap.add_argument("header", type=Path)
     ap.add_argument("site", type=Path)
+    ap.add_argument("--storage", choices=sorted(TOLERANCE), default="float16",
+                    help="the dtype the site's graphs store their weights in (suite.json 'storage')")
     ap.add_argument("--max-entries", type=int, default=0)
     args = ap.parse_args()
 
@@ -56,6 +64,7 @@ def main() -> int:
         merged = merged[merged["plot_id"].isin(short)]
     print(f"{len(merged)} plots compared")
 
+    tolerance, agreement = TOLERANCE[args.storage], AGREEMENT[args.storage]
     failed = False
     for col in site.columns:
         if col == "plot_id" or f"{col}_engine" not in merged.columns:
@@ -63,16 +72,16 @@ def main() -> int:
         a, b = merged[f"{col}_site"], merged[f"{col}_engine"]
         if not (pd.api.types.is_numeric_dtype(a) and pd.api.types.is_numeric_dtype(b)):
             agree = float((a.astype(str) == b.astype(str)).mean())
-            ok = agree == 1.0
+            ok = agree >= agreement
             print(f"{col}: label agreement {agree:.5f}")
         else:
             a, b = a.to_numpy(float), b.to_numpy(float)
             if "_prob_" in col:
-                err, tol = np.nanmax(np.abs(a - b)), TOLERANCE["probability"]
+                err, tol = np.nanmax(np.abs(a - b)), tolerance["probability"]
             elif col.endswith(("_latitude", "_longitude")):
-                err, tol = np.nanmax(np.abs(a - b)), TOLERANCE["degrees"]
+                err, tol = np.nanmax(np.abs(a - b)), tolerance["degrees"]
             else:
-                err, tol = np.nanmax(np.abs(a - b) / np.maximum(np.abs(b), 1.0)), TOLERANCE["relative"]
+                err, tol = np.nanmax(np.abs(a - b) / np.maximum(np.abs(b), 1.0)), tolerance["relative"]
             ok = bool(err <= tol)
             print(f"{col}: max difference {err:.2e} (tolerance {tol:.0e})")
         failed |= not ok

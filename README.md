@@ -27,11 +27,11 @@ python export/export_suite.py <suite dir> site/models/<suite name>
 ```
 
 Each exported graph is checked against the same member in torch before it is
-written. `--storage float16` halves the files and `--storage int8` (blocks of
-the largest matrices, float16 for the rest) takes them to under a third, at
-the cost of moving the predictions; on 2,000 NPMS plots, against float32,
-float16 changed no EUNIS label and altitude by at most 7.5 m, int8 changed
-altitude by 1 m on average and up to 104 m.
+written. Weights are stored as float16 (`--storage`), half the size of
+float32; `int8` (blocks of the largest matrices, float16 for the rest) takes
+them to under a third. On 2,000 NPMS plots, against float32, float16 changed
+no combined EUNIS label and the combined altitude by at most 7.5 m; int8
+changed altitude by 1 m on average and up to 104 m.
 The page reads `site/models/V_species_context` for plots with coordinates and
 `site/models/V_minimal` for plots without.
 
@@ -43,11 +43,13 @@ node tests/run_suite.mjs site/models/V_species_context plots.csv header.csv site
 python tests/compare_engine.py <suite dir> plots.csv header.csv site.csv
 ```
 
-`compare_engine.py` needs a Python with `resolve_core`.
+`compare_engine.py` needs a Python with `resolve_core`; `--storage` names the
+dtype the graphs were exported in, which sets its tolerances. With float32
+graphs, on 2,000 plots of the UK National Plant Monitoring Scheme, every EUNIS
+label agrees with the engine, probabilities differ by less than 1e-6 and
+regressions by less than 5e-4 of their value.
+
 `tests/browser_bench.py` runs the same prediction path in headless Edge
 (`--ep webgpu` for the GPU, `--threads N` for the CPU) and writes the same
 table; `tests/browser_bench.py --site <models dir>` checks that the page
-becomes cross-origin isolated and predicts the example plot. On 2,000 plots of the
-UK National Plant Monitoring Scheme every EUNIS label agrees with the engine,
-probabilities differ by less than 1e-6 and regressions by less than 5e-4 of
-their value.
+becomes cross-origin isolated and predicts the example plot.
